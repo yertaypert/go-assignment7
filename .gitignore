@@ -1,3 +1,6 @@
 .gocache
 .idea
 .env
+
+.txt
+*.txt

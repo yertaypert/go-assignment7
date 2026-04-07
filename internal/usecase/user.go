@@ -19,6 +19,34 @@ func NewUserUseCase(r UserRepository) *UserUseCase {
 	}
 }
 
+func (u *UserUseCase) GetMe(userID string) (*entity.User, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, fmt.Errorf("user id is required")
+	}
+
+	user, err := u.repo.GetUserByID(userID)
+	if err != nil {
+		return nil, fmt.Errorf("get me: %w", err)
+	}
+
+	return user, nil
+}
+
+func (u *UserUseCase) PromoteUser(userID string) (*entity.User, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, fmt.Errorf("user id is required")
+	}
+
+	user, err := u.repo.PromoteUser(userID)
+	if err != nil {
+		return nil, fmt.Errorf("promote user: %w", err)
+	}
+
+	return user, nil
+}
+
 func (u *UserUseCase) RegisterUser(user *entity.User) (*entity.User, string, error) {
 	user, err := u.repo.RegisterUser(user)
 	if err != nil {

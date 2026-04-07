@@ -22,10 +22,16 @@ func RegisterUserRoutes(handler *gin.RouterGroup, t usecase.UserInterface) {
 	{
 		h.POST("/", r.RegisterUser)
 		h.POST("/login", r.LoginUser)
-		protected := h.Group("/protected")
-		protected.Use(utils.JWTAuthMiddleware())
+		auth := h.Group("")
+		auth.Use(utils.JWTAuthMiddleware())
 		{
-			protected.GET("/hello", r.ProtectedFunc)
+			auth.GET("/me", r.GetMe)
+			auth.GET("/protected/hello", r.ProtectedFunc)
+		}
+		admin := h.Group("")
+		admin.Use(utils.JWTAuthMiddleware(), utils.RoleMiddleware("admin"))
+		{
+			admin.PATCH("/promote/:id", r.PromoteUser)
 		}
 	}
 }
@@ -97,4 +103,45 @@ func (r *userRoutes) LoginUser(c *gin.Context) {
 
 func (r *userRoutes) ProtectedFunc(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "OK"})
+}
+
+func (r *userRoutes) GetMe(c *gin.Context) {
+	userIDValue, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "token required"})
+		return
+	}
+
+	userID, ok := userIDValue.(string)
+	if !ok || strings.TrimSpace(userID) == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		return
+	}
+
+	user, err := r.t.GetMe(userID)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"user": user.ToResponse()})
+}
+
+func (r *userRoutes) PromoteUser(c *gin.Context) {
+	userID := strings.TrimSpace(c.Param("id"))
+	if userID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user id is required"})
+		return
+	}
+
+	user, err := r.t.PromoteUser(userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "user promoted to admin",
+		"user":    user.ToResponse(),
+	})
 }
