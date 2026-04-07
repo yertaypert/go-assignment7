@@ -1,9 +1,12 @@
 package v1
 
 import (
+	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 	"github.com/yertaypert/go-assignment7/internal/entity"
 	"github.com/yertaypert/go-assignment7/internal/usecase"
 	"github.com/yertaypert/go-assignment7/utils"
@@ -23,10 +26,22 @@ func RegisterUserRoutes(handler *gin.RouterGroup, t usecase.UserInterface) {
 
 func (r *userRoutes) RegisterUser(c *gin.Context) {
 	var createUserDTO entity.CreateUserDTO
-	if err := c.ShouldBindJSON(&createUserDTO); err != nil {
+
+	if err := json.NewDecoder(c.Request.Body).Decode(&createUserDTO); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	createUserDTO.Username = strings.TrimSpace(createUserDTO.Username)
+	createUserDTO.Email = strings.TrimSpace(createUserDTO.Email)
+	createUserDTO.Password = strings.TrimSpace(createUserDTO.Password)
+	createUserDTO.Role = strings.TrimSpace(createUserDTO.Role)
+
+	if err := validator.New().Struct(createUserDTO); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
 	hashedPassword, err := utils.HashPassword(createUserDTO.Password)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error hashing password"})
