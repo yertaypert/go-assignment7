@@ -1,34 +1,35 @@
 package repo
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/google/uuid"
 	"github.com/yertaypert/go-assignment7/internal/entity"
+	"github.com/yertaypert/go-assignment7/pkg"
 )
 
 type UserRepo struct {
-	mu      sync.Mutex
-	byEmail map[string]entity.User
+	PG *pkg.Postgres
 }
 
-func NewUserRepo() *UserRepo {
-	return &UserRepo{
-		byEmail: make(map[string]entity.User),
-	}
+func NewUserRepo(pg *pkg.Postgres) *UserRepo {
+	return &UserRepo{PG: pg}
 }
 
 func (u *UserRepo) RegisterUser(user *entity.User) (*entity.User, error) {
-	u.mu.Lock()
-	defer u.mu.Unlock()
-
 	email := strings.ToLower(strings.TrimSpace(user.Email))
 	if email == "" {
 		return nil, fmt.Errorf("email is required")
 	}
-	if _, exists := u.byEmail[email]; exists {
+
+	var exists bool
+	checkQuery := `SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)`
+	if err := u.PG.Conn.QueryRow(checkQuery, email).Scan(&exists); err != nil {
+		return nil, fmt.Errorf("check existing user: %w", err)
+	}
+	if exists {
 		return nil, fmt.Errorf("user with email %s already exists", user.Email)
 	}
 
@@ -40,7 +41,42 @@ func (u *UserRepo) RegisterUser(user *entity.User) (*entity.User, error) {
 	}
 	created.Verified = false
 
-	u.byEmail[email] = created
+	const insertQuery = `
+INSERT INTO users (id, username, email, password, role, verified)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, username, email, password, role, verified`
 
-	return &created, nil
+	row := u.PG.Conn.QueryRow(
+		insertQuery,
+		created.ID,
+		created.Username,
+		created.Email,
+		created.Password,
+		created.Role,
+		created.Verified,
+	)
+
+	var stored entity.User
+	var id string
+	if err := row.Scan(
+		&id,
+		&stored.Username,
+		&stored.Email,
+		&stored.Password,
+		&stored.Role,
+		&stored.Verified,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("user insert returned no rows")
+		}
+		return nil, fmt.Errorf("insert user: %w", err)
+	}
+
+	parsedID, err := uuid.Parse(id)
+	if err != nil {
+		return nil, fmt.Errorf("parse returned id: %w", err)
+	}
+	stored.ID = parsedID
+
+	return &stored, nil
 }
