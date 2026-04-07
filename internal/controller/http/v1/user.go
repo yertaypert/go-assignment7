@@ -21,6 +21,7 @@ func RegisterUserRoutes(handler *gin.RouterGroup, t usecase.UserInterface) {
 	h := handler.Group("/users")
 	{
 		h.POST("/", r.RegisterUser)
+		h.POST("/login", r.LoginUser)
 	}
 }
 
@@ -63,4 +64,28 @@ func (r *userRoutes) RegisterUser(c *gin.Context) {
 		"session_id": sessionID,
 		"user":       createdUser,
 	})
+}
+
+func (r *userRoutes) LoginUser(c *gin.Context) {
+	var input entity.LoginUserDTO
+	if err := json.NewDecoder(c.Request.Body).Decode(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	input.Username = strings.TrimSpace(input.Username)
+	input.Password = strings.TrimSpace(input.Password)
+
+	if err := validator.New().Struct(input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	token, err := r.t.LoginUser(&input)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"token": token})
 }

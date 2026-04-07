@@ -80,3 +80,42 @@ RETURNING id, username, email, password, role, verified`
 
 	return &stored, nil
 }
+
+func (u *UserRepo) LoginUser(user *entity.LoginUserDTO) (*entity.User,
+	error) {
+	username := strings.TrimSpace(user.Username)
+	if username == "" {
+		return nil, fmt.Errorf("username is required")
+	}
+
+	const query = `
+SELECT id, username, email, password, role, verified
+FROM users
+WHERE username = $1
+LIMIT 1`
+
+	var userFromDB entity.User
+	var id string
+	err := u.PG.Conn.QueryRow(query, username).Scan(
+		&id,
+		&userFromDB.Username,
+		&userFromDB.Email,
+		&userFromDB.Password,
+		&userFromDB.Role,
+		&userFromDB.Verified,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("username not found")
+		}
+		return nil, fmt.Errorf("find user by username: %w", err)
+	}
+
+	parsedID, err := uuid.Parse(id)
+	if err != nil {
+		return nil, fmt.Errorf("parse user id: %w", err)
+	}
+	userFromDB.ID = parsedID
+
+	return &userFromDB, nil
+}
