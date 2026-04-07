@@ -18,5 +18,8 @@ func NewRouter(userUC usecase.UserInterface) *gin.Engine {
 	apiV1 := router.Group("/api/v1")
 	v1.RegisterUserRoutes(apiV1, userUC)
 
+	plainV1 := router.Group("/v1")
+	v1.RegisterUserRoutes(plainV1, userUC)
+
 	return router
 }

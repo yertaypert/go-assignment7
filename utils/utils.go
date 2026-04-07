@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -12,7 +13,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var jwtSecret = []byte(os.Getenv("JWT_SECRET"))
+var jwtSecret = []byte(getJWTSecret())
 
 func HashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password),
@@ -27,7 +28,7 @@ func CheckPassword(hashedPassword, password string) bool {
 
 func GenerateJWT(userID uuid.UUID, role string) (string, error) {
 	claims := jwt.MapClaims{
-		"user_id": userID,
+		"user_id": userID.String(),
 		"role":    role,
 		"exp":     time.Now().Add(time.Hour * 24).Unix(),
 	}
@@ -40,21 +41,40 @@ func JWTAuthMiddleware() gin.HandlerFunc {
 		tokenStr := c.GetHeader("Authorization")
 		if tokenStr == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized,
-				gin.H{"error": "Token required"})
+				gin.H{"error": "token required"})
 			return
 		}
 		tokenStr = strings.TrimPrefix(tokenStr, "Bearer ")
 		token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method")
+			}
 			return jwtSecret, nil
 		})
 		if err != nil || !token.Valid {
 			c.AbortWithStatusJSON(http.StatusUnauthorized,
-				gin.H{"error": "Invalid token"})
+				gin.H{"error": "invalid token"})
 			return
 		}
-		claims, _ := token.Claims.(jwt.MapClaims)
-		c.Set("userID", claims["user_id"].(string))
-		c.Set("role", claims["role"].(string))
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized,
+				gin.H{"error": "invalid token"})
+			return
+		}
+
+		userID, _ := claims["user_id"].(string)
+		role, _ := claims["role"].(string)
+		c.Set("userID", userID)
+		c.Set("role", role)
 		c.Next()
 	}
+}
+
+func getJWTSecret() string {
+	if secret := os.Getenv("JWT_SECRET"); secret != "" {
+		return secret
+	}
+
+	return "dev-secret"
 }

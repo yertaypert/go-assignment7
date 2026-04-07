@@ -22,6 +22,11 @@ func RegisterUserRoutes(handler *gin.RouterGroup, t usecase.UserInterface) {
 	{
 		h.POST("/", r.RegisterUser)
 		h.POST("/login", r.LoginUser)
+		protected := h.Group("/protected")
+		protected.Use(utils.JWTAuthMiddleware())
+		{
+			protected.GET("/hello", r.ProtectedFunc)
+		}
 	}
 }
 
@@ -88,4 +93,8 @@ func (r *userRoutes) LoginUser(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"token": token})
+}
+
+func (r *userRoutes) ProtectedFunc(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"message": "OK"})
 }
