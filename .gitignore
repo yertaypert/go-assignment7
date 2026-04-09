@@ -2,5 +2,9 @@
 .idea
 .env
 
+app
+
 .txt
 *.txt
+*.exe
+/bin/
